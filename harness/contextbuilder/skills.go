@@ -11,7 +11,7 @@ import (
 //go:embed prompts/skill-preamble.md
 var skillPreambleFile string
 
-var skillPreamble = strings.TrimSpace(skillPreambleFile)
+var skillPreamble = strings.TrimSpace(strings.ReplaceAll(skillPreambleFile, "\r\n", "\n"))
 
 type availableSkills struct {
 	XMLName xml.Name      `xml:"available_skills"`

@@ -38,11 +38,12 @@ func (store *Store) listSessionEntries(ctx context.Context, entries []fs.DirEntr
 		if err := validateSessionID(id); err != nil {
 			continue
 		}
-		info, err := entry.Info()
+		// Windows DirEntry.Info may return metadata cached by ReadDir.
+		info, err := os.Lstat(store.sessionPath(id))
 		if errors.Is(err, errors.ErrUnsupported) {
 			return nil, fmt.Errorf("list session %q: %w", id, err)
 		}
-		if err != nil {
+		if err != nil || !info.Mode().IsRegular() {
 			continue
 		}
 		sessions = append(sessions, sessionstore.SessionInfo{

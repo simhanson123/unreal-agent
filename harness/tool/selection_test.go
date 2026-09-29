@@ -7,7 +7,7 @@ import (
 )
 
 func TestRegistryKeepsSelectedStaticToolsAcrossCatalogChanges(t *testing.T) {
-	allNames := []string{BashName, ViewImageName, SkillUseName}
+	allNames := []string{ShellName, BashName, ViewImageName, SkillUseName}
 	for selection := range 1 << len(allNames) {
 		t.Run(fmt.Sprint(selection), func(t *testing.T) {
 			var enabled []string

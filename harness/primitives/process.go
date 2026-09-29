@@ -11,8 +11,6 @@ import (
 	"sync"
 	"syscall"
 	"time"
-
-	"golang.org/x/sys/unix"
 )
 
 const (
@@ -250,7 +248,7 @@ func (process *ProcessInvocation) signal(
 	}
 	var err error
 	if request.PropagateToChildren {
-		err = syscall.Kill(-process.process.Pid, request.Signal)
+		err = signalProcessInvocation(process.process, request.Signal)
 	} else {
 		err = process.process.Signal(request.Signal)
 	}
@@ -289,7 +287,7 @@ func (process *ProcessInvocation) prepareControl(
 		return errProcessDone
 	}
 	if processGroup {
-		exists, err := processGroupExists(process.process.Pid)
+		exists, err := processInvocationExists(process.process)
 		if err != nil {
 			return fmt.Errorf("inspect process group: %w", err)
 		}
@@ -356,7 +354,7 @@ func runProcess(
 		)
 		return
 	}
-	if err := command.Start(); err != nil {
+	if err := startPlatformProcess(command); err != nil {
 		startErr := errors.Join(
 			fmt.Errorf("start process %q: %w", request.Path, err),
 			pipes.closeAll(),
@@ -366,6 +364,7 @@ func runProcess(
 		sendProcessTerminalEvent(events, processFailure(request.Source, request.CorrelationID, startErr))
 		return
 	}
+	defer releasePlatformProcess(command.Process)
 
 	parentPipes := pipes.parent()
 	process.process = command.Process
@@ -405,6 +404,10 @@ func runProcess(
 		waitCompleted,
 		processTerminationGracePeriod,
 	)
+	if completionErr != nil {
+		// A failed tree cleanup must not leave readers waiting on inherited writers.
+		completionErr = errors.Join(completionErr, parentPipes.closeAll())
+	}
 	captureSyncErr := parentPipes.syncCaptures()
 	captureCloseErr := parentPipes.closeCaptures()
 	stdinCloseErr := closeProcessFile(parentPipes.stdin)
@@ -606,7 +609,7 @@ func prepareProcess(request ProcessStartRequest) (*exec.Cmd, processPipes, error
 	command := exec.Command(request.Path, request.Arguments...)
 	command.Dir = request.Directory
 	command.Env = request.Environment
-	command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	configurePlatformProcess(command)
 	if pipes.stdinRead != nil {
 		command.Stdin = pipes.stdinRead
 	}
@@ -624,21 +627,11 @@ func prepareProcess(request ProcessStartRequest) (*exec.Cmd, processPipes, error
 }
 
 func openProcessCapture(path string, stream string) (*os.File, os.FileInfo, error) {
-	var descriptor int
-	err := retryEINTR(func() error {
-		var openErr error
-		descriptor, openErr = unix.Open(
-			path,
-			unix.O_WRONLY|unix.O_NONBLOCK|unix.O_NOFOLLOW|unix.O_CLOEXEC,
-			0,
-		)
-		return openErr
-	})
+	file, err := openPlatformCapture(path)
 	if err != nil {
 		return nil, nil, fmt.Errorf("open process %s capture %q: %w", stream, path, err)
 	}
 
-	file := os.NewFile(uintptr(descriptor), path)
 	info, err := file.Stat()
 	if err != nil {
 		return nil, nil, errors.Join(
@@ -652,7 +645,7 @@ func openProcessCapture(path string, stream string) (*os.File, os.FileInfo, erro
 			closeProcessFile(file),
 		)
 	}
-	if err := unix.SetNonblock(descriptor, false); err != nil {
+	if err := preparePlatformCapture(file); err != nil {
 		return nil, nil, errors.Join(
 			fmt.Errorf("open process %s capture %q: set blocking: %w", stream, path, err),
 			closeProcessFile(file),
@@ -665,7 +658,7 @@ func truncateProcessCapture(file *os.File, path string, stream string) error {
 	if file == nil {
 		return nil
 	}
-	if err := retryEINTR(func() error { return unix.Ftruncate(int(file.Fd()), 0) }); err != nil {
+	if err := file.Truncate(0); err != nil {
 		return errors.Join(
 			fmt.Errorf("truncate process %s capture %q: %w", stream, path, err),
 			closeProcessFile(file),
@@ -750,7 +743,7 @@ func finishProcessOutput(file *os.File, deadline time.Time) error {
 	if file == nil {
 		return nil
 	}
-	deadlineErr := file.SetReadDeadline(deadline)
+	deadlineErr := finishPlatformOutput(file, deadline)
 	if deadlineErr == nil {
 		return nil
 	}
@@ -759,77 +752,6 @@ func finishProcessOutput(file *os.File, deadline time.Time) error {
 
 func (pipes processParentPipes) closeOutput() error {
 	return errors.Join(closeProcessFile(pipes.stdout), closeProcessFile(pipes.stderr))
-}
-
-func terminateProcess(
-	process *os.Process,
-	pipes processParentPipes,
-	gracePeriod time.Duration,
-) error {
-	termErr := signalProcessInvocation(process, syscall.SIGTERM)
-	exited, waitErr := waitForProcessInvocation(process, gracePeriod)
-	// Unlike Darwin's exiting-member check, this forgives EPERM only after confirmed completion.
-	if exited && errors.Is(termErr, syscall.EPERM) {
-		termErr = nil
-	}
-	var killErr error
-	if !exited {
-		killErr = signalProcessInvocation(process, syscall.SIGKILL)
-	}
-	return errors.Join(termErr, waitErr, killErr, pipes.closeAll())
-}
-
-func signalProcessInvocation(process *os.Process, signal syscall.Signal) error {
-	err := syscall.Kill(-process.Pid, signal)
-	err = normalizeProcessGroupSignalError(process.Pid, err)
-	if err == nil {
-		return nil
-	}
-	if !errors.Is(err, syscall.ESRCH) {
-		return err
-	}
-
-	err = process.Signal(signal)
-	if errors.Is(err, os.ErrProcessDone) || errors.Is(err, syscall.ESRCH) {
-		return nil
-	}
-	return err
-}
-
-func waitForProcessInvocation(
-	process *os.Process,
-	gracePeriod time.Duration,
-) (bool, error) {
-	deadline := time.Now().Add(gracePeriod)
-	delay := time.Millisecond
-	for {
-		groupExists, err := processGroupExists(process.Pid)
-		if err != nil {
-			return false, err
-		}
-		if !groupExists && processWaitCompleted(process) {
-			return true, nil
-		}
-
-		remaining := time.Until(deadline)
-		if remaining <= 0 {
-			return false, nil
-		}
-		timer := time.NewTimer(min(delay, remaining))
-		<-timer.C
-		delay = min(delay*2, 50*time.Millisecond)
-	}
-}
-
-func processGroupExists(processGroupID int) (bool, error) {
-	err := syscall.Kill(-processGroupID, 0)
-	if err == nil || errors.Is(err, syscall.EPERM) {
-		return true, nil
-	}
-	if errors.Is(err, syscall.ESRCH) {
-		return false, nil
-	}
-	return false, err
 }
 
 func closeProcessFile(file *os.File) error {
@@ -896,43 +818,6 @@ func streamProcessOutput(
 				return nil
 			}
 			return fmt.Errorf("read process %s: %w", processStreamName(output.stream), readErr)
-		}
-	}
-}
-
-func drainProcessOutput(
-	ctx context.Context,
-	request ProcessStartRequest,
-	stream ProcessStream,
-	reader *os.File,
-	offset *int64,
-	events chan<- PrimitiveEvent,
-) error {
-	fileDescriptor := int(reader.Fd())
-	if err := unix.SetNonblock(fileDescriptor, true); err != nil {
-		return fmt.Errorf("drain process %s: set nonblocking: %w", processStreamName(stream), err)
-	}
-
-	buffer := make([]byte, ProcessOutputChunkSize)
-	for {
-		count, readErr := unix.Read(fileDescriptor, buffer)
-		if count > 0 {
-			if !sendProcessOutput(ctx, request, stream, *offset, buffer[:count], events) {
-				return nil
-			}
-			*offset += int64(count)
-		}
-		if errors.Is(readErr, unix.EINTR) {
-			continue
-		}
-		if errors.Is(readErr, unix.EAGAIN) || errors.Is(readErr, unix.EWOULDBLOCK) {
-			return nil
-		}
-		if readErr != nil {
-			return fmt.Errorf("drain process %s: %w", processStreamName(stream), readErr)
-		}
-		if count == 0 {
-			return nil
 		}
 	}
 }

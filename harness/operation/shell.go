@@ -523,7 +523,7 @@ func startShellProcess(id ID, state ShellState, paths shellPaths) PrimitiveDispa
 			Source:        primitives.SourceID(id),
 			CorrelationID: primitives.CorrelationID(ShellPhaseProcess),
 			Path:          state.Input.Shell,
-			Arguments:     []string{"-c", state.Input.Command},
+			Arguments:     shellArguments(state.Input.Shell, state.Input.Command),
 			Directory:     state.Input.Directory,
 			StdoutPath:    paths.out,
 			StderrPath:    paths.err,

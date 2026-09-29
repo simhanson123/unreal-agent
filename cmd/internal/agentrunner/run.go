@@ -11,6 +11,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -42,7 +43,8 @@ const (
 	llmMaxAttemptsEnvironment = "UNREAL_HARNESS_LLM_MAX_ATTEMPTS"
 )
 
-const defaultSystemPrompt = `You are an AI agent running inside an isolated sandbox container.
+const defaultSystemPrompt = `You are an AI agent working in the configured workspace on the host.
+Do not assume that shell commands are isolated by a security sandbox.
 
 ## Guidelines
 - Save output files to the workspace root.
@@ -169,7 +171,7 @@ func Run(
 		return nil
 	})
 	sessionDirectory := flags.String("session-directory", "", "directory containing session files; defaults to $XDG_STATE_HOME/unreal-agent/sessions, or $HOME/.local/state/unreal-agent/sessions")
-	workspaceDirectory := flags.String("workspace", ".", "agent workspace and Bash working directory")
+	workspaceDirectory := flags.String("workspace", ".", "agent workspace and native shell working directory")
 	logDirectory := flags.String("log-directory", "", "optional session JSONL log directory; unset writes only to stdout")
 	toolHeartbeatInterval := flags.Duration("tool-heartbeat-interval", 10*time.Minute, "tool-wait heartbeat interval (0 disables)")
 	if err := flags.Parse(args); err != nil {
@@ -316,12 +318,15 @@ func Run(
 	if err := os.MkdirAll(operationDirectory, 0o700); err != nil {
 		return fmt.Errorf("create operation directory: %w", err)
 	}
-	shell := strings.TrimSpace(getenv("SHELL"))
-	if shell == "" {
-		shell = "/bin/sh"
+	shell, err := hostShell(getenv)
+	if err != nil {
+		return err
 	}
 	skills, skillErrors := tool.DiscoverSkills(filepath.Join(workspace, ".harness", "skills"))
 	names := []string{tool.BashName, tool.ViewImageName}
+	if runtime.GOOS == "windows" {
+		names[0] = tool.ShellName
+	}
 	if len(skills) != 0 {
 		names = append(names, tool.SkillUseName)
 	}
@@ -329,6 +334,11 @@ func Run(
 		SessionID: sessionID, Getenv: getenv, Names: names,
 		Translators: tool.StaticTranslators{
 			Bash: bash.New(bash.Config{
+				Shell:         shell,
+				Directory:     workspace,
+				BaseDirectory: operationDirectory,
+			}),
+			Shell: bash.New(bash.Config{
 				Shell:         shell,
 				Directory:     workspace,
 				BaseDirectory: operationDirectory,
@@ -415,6 +425,9 @@ func Run(
 	systemPrompt := defaultSystemPrompt
 	if parsed.SystemPrompt != nil {
 		systemPrompt = *parsed.SystemPrompt
+	}
+	if runtime.GOOS == "windows" {
+		systemPrompt += fmt.Sprintf("\nHost OS: Windows. Shell executable: %q. Use its native command syntax; the default is PowerShell 7, not Bash.\n", shell)
 	}
 	builder.SetSystemPrompt(systemPrompt)
 	for _, definition := range registry.StaticDefinitions() {

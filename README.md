@@ -6,6 +6,24 @@ An async-first agent harness from Unreal Labs.
 - [cmd/](cmd/) — executables that use the library.
 - [benchmarks/](benchmarks/) — benchmark runners.
 
+## Windows native preview
+
+This fork adds a native Windows process backend using Job Objects, PowerShell 7
+execution, and session persistence support. Go 1.27+ and PowerShell 7 are required;
+Git Bash and WSL are not required.
+
+```powershell
+go build -trimpath -o bin/unreal-agent-runner.exe ./cmd/unreal-agent-runner
+go test -race ./harness/hosttest ./cmd/hosttest
+.\bin\unreal-agent-runner.exe -h
+```
+
+This is an initial runtime port, not a completed sandbox or coding-agent MVP.
+The existing Codex credential-file backend is not yet Windows-ready; official
+SDK login, Anthropic, and Kimi integration remain follow-up work.
+See [Windows port status and roadmap](WINDOWS_PORT.md) for verified scope,
+known limitations, and the implementation sequence.
+
 ## Glossary
 
 - **Input**: an event with a caller-supplied globally unique ID that remains
@@ -35,7 +53,7 @@ An async-first agent harness from Unreal Labs.
 | Session store | Persist canonical session history and operation state; support recovery and forks; atomically record tool-call status with operations. |
 | Context builder | Statefully assemble model input in memory. Return the model input together with a record of anything omitted, truncated, or compacted. Perform no I/O and accept no persistence dependencies. |
 | LLM Adapter | Send prepared model input to a provider and return a normalized completed response. Own authentication, cancellation, and provider errors. |
-| Tool registry | Own the fixed Bash, ViewImage, and skill-use definitions and their translators; expose the host-selected set. |
+| Tool registry | Own the fixed Shell, legacy Bash, ViewImage, and skill-use definitions and their translators; expose the host-selected set. |
 | Tool translator | Validate a tool call and produce its status and operations. Format a recorded call status and prepared operation output into model results. Perform no I/O. |
 | Operation manager | Actor runtime for durable operations. The local implementation is swappable. |
 

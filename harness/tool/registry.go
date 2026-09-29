@@ -14,6 +14,7 @@ import (
 
 const (
 	BashName      = "Bash"
+	ShellName     = "Shell"
 	ViewImageName = "ViewImage"
 	SkillUseName  = "SkillUse"
 )
@@ -33,6 +34,7 @@ var _ Registry = (*registry)(nil)
 
 type StaticTranslators struct {
 	Bash      Translator
+	Shell     Translator
 	ViewImage Translator
 }
 
@@ -51,8 +53,12 @@ func NewRegistry(configured StaticTranslators, enabled ...string) Registry {
 	if configured.ViewImage == nil {
 		configured.ViewImage = unavailableTranslator{name: ViewImageName}
 	}
+	if configured.Shell == nil {
+		configured.Shell = unavailableTranslator{name: ShellName}
+	}
 	current.staticTranslators = map[string]Translator{
 		BashName:      configured.Bash,
+		ShellName:     configured.Shell,
 		ViewImageName: configured.ViewImage,
 		SkillUseName:  &skillUseTranslator{registry: current},
 	}

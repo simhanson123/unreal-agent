@@ -18,7 +18,7 @@ const ToolCallRunningPayload = "Tool call is still running. Its result arrives i
 //go:embed prompts/preamble.md
 var preambleFile string
 
-var preamble = strings.TrimSpace(preambleFile)
+var preamble = strings.TrimSpace(strings.ReplaceAll(preambleFile, "\r\n", "\n"))
 
 type builder struct {
 	request         llm.Request

@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -403,7 +404,7 @@ func publishFile(directory, target string, data []byte) (err error) {
 		return err
 	}
 
-	if err := os.Rename(temporaryPath, target); err != nil {
+	if err := publishRename(temporaryPath, target); err != nil {
 		return fmt.Errorf("publish session file: %w", err)
 	}
 	temporaryPath = ""
@@ -411,7 +412,7 @@ func publishFile(directory, target string, data []byte) (err error) {
 }
 
 func appendFile(path string, committedSize int64, data []byte) (err error) {
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND, 0)
+	file, err := openAppendFile(path)
 	if err != nil {
 		return fmt.Errorf("open session log for append: %w", err)
 	}
@@ -422,6 +423,9 @@ func appendFile(path string, committedSize int64, data []byte) (err error) {
 	}()
 	if err := file.Truncate(committedSize); err != nil {
 		return fmt.Errorf("discard incomplete session record: %w", err)
+	}
+	if _, err := file.Seek(0, io.SeekEnd); err != nil {
+		return fmt.Errorf("seek session log for append: %w", err)
 	}
 	if _, err := file.Write(data); err != nil {
 		return fmt.Errorf("append session record: %w", err)
@@ -461,7 +465,7 @@ func syncDirectoryFile(directory *os.File) (err error) {
 			err = errors.Join(err, fmt.Errorf("close session store directory: %w", closeErr))
 		}
 	}()
-	if err := directory.Sync(); err != nil {
+	if err := syncDirectoryHandle(directory); err != nil {
 		return fmt.Errorf("sync session store directory: %w", err)
 	}
 	return nil

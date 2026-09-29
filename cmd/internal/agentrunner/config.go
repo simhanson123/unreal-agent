@@ -34,6 +34,11 @@ type ToolFactory func(context.Context, ToolConfig) (Tools, error)
 func (parsed Request) EnabledTools(names ...string) []string {
 	enabled := make([]string, 0, len(names))
 	for _, name := range names {
+		// A host-specific alias must not bypass a persisted execution restriction.
+		if (name == tool.BashName || name == tool.ShellName) &&
+			(slices.Contains(parsed.DisallowedTools, tool.BashName) || slices.Contains(parsed.DisallowedTools, tool.ShellName)) {
+			continue
+		}
 		if !slices.Contains(parsed.DisallowedTools, name) {
 			enabled = append(enabled, name)
 		}

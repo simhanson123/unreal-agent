@@ -10,6 +10,40 @@ on:
 permissions: {}
 
 jobs:
+  windows:
+    runs-on: windows-2025
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Build all production packages
+        run: go build -mod=readonly ./...
+      - name: Run native host contracts
+        run: go test -race -count=1 -timeout=3m ./harness/hosttest ./cmd/hosttest
+      - name: Vet native host contracts
+        run: go vet ./harness/hosttest ./cmd/hosttest
+      - name: Run portable regression suites
+        run: >-
+          go test -count=1 -timeout=3m ./harness/sessionstore/... ./harness/tool
+          ./harness/contextbuilder ./harness/inbox ./harness/llm
+          ./harness/llm/responsesapi ./harness/llm/clients/openai
+          ./harness/llm/clients/openrouter ./harness/llm/clients/ollama
+          ./harness/llm/clients/fireworks
+      - name: Build portable runner
+        run: go build -mod=readonly -trimpath -o bin/unreal-agent-runner.exe ./cmd/unreal-agent-runner
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: unreal-agent-windows-amd64
+          path: bin/unreal-agent-runner.exe
+          if-no-files-found: error
+
   go:
     strategy:
       fail-fast: false

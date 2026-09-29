@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -45,9 +46,6 @@ func TestListSessions(t *testing.T) {
 	if err := os.Mkdir(filepath.Join(directory, "nested.session.jsonl"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Symlink("a.session.jsonl", filepath.Join(directory, "link.session.jsonl")); err != nil {
-		t.Fatal(err)
-	}
 	listed, err = newStore(t, directory).ListSessions(t.Context())
 	if err != nil {
 		t.Fatal(err)
@@ -59,6 +57,24 @@ func TestListSessions(t *testing.T) {
 		if info.ID != want[index].ID || !info.LastUpdatedAt.Equal(want[index].LastUpdatedAt) {
 			t.Fatalf("list entry %d = %#v, want %#v", index, info, want[index])
 		}
+	}
+}
+
+func TestListSessionsIgnoresSymlink(t *testing.T) {
+	directory := t.TempDir()
+	store := newStore(t, directory)
+	if _, err := store.Create(t.Context(), "a"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("a.session.jsonl", filepath.Join(directory, "link.session.jsonl")); err != nil {
+		if runtime.GOOS == "windows" {
+			t.Skipf("symlink creation unavailable: %v", err)
+		}
+		t.Fatal(err)
+	}
+	listed, err := store.ListSessions(t.Context())
+	if err != nil || len(listed) != 1 || listed[0].ID != "a" {
+		t.Fatalf("list containing symlink = %#v, %v", listed, err)
 	}
 }
 

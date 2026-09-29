@@ -40,6 +40,19 @@ func staticDefinitions() []Definition {
 	return []Definition{
 		{Tool: llm.Tool{
 			Type:        llm.ToolFunction,
+			Name:        ShellName,
+			Description: "Execute a native shell command in background. On Windows use PowerShell 7 syntax; on Unix use the configured shell syntax. Child processes are terminated when the shell exits. Independent commands may run in parallel.",
+			Parameters: map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"command":           map[string]any{"type": "string", "description": "The native shell command to execute."},
+					"max_output_length": maxOutputLengthSchema(),
+				},
+				"required": []any{"command"},
+			},
+		}},
+		{Tool: llm.Tool{
+			Type:        llm.ToolFunction,
 			Name:        BashName,
 			Description: "Execute a shell command in background. Independent commands may be issued as parallel tool calls in one turn. Command child processes are killed when the shell exits.",
 			Parameters: map[string]any{
