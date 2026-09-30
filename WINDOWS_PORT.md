@@ -122,7 +122,8 @@ checkout CRLF로 embedded prompt가 달라지는 문제도 수정했다.
 - 최종 출력 파일의 reparse point와 ADS/device 경로를 거부하지만, 모든 도구의 workspace escape 방지는 후속 보안 단계다.
 - Shell 프로세스 환경은 기존처럼 상속한다. secret filtering과 최소 환경 전달은 별도 작업이다.
 - 일반 background operation은 Shell이 살아 있는 동안 실행된다. Shell 종료 후 자식만 남기는 detached daemon은 허용하지 않는다.
-- 기존 release workflow는 upstream 전용 조건을 유지한다. 이번 Windows CI artifact는 installer/winget 배포가 아니다.
+- Release workflow는 원본과 포크의 버전 태그에서 Linux/macOS archive 및 Windows AMD64 ZIP과 SHA256SUMS를 게시한다. 포크에서는 Docker 게시가 건너뛰어지며 Windows 테스트 성공이 필수다. `main` CI artifact는 GitHub Release가 아니며 태그를 게시해야 다운로드 가능하다. MSI/winget installer는 제공하지 않는다.
+- Windows `v0.2.1` 프리뷰 릴리스는 기존 커밋 `924a022`로 게시했다. 이 릴리스에는 Windows ZIP 및 SHA256SUMS만 포함된다. 이후 버전 태그는 위 워크플로를 통해 자동 배포한다.
 - 기존 `openaicodex` credential-file backend는 POSIX 파일 권한과 HOME 전제가 있어 Windows 인증 테스트가 아직 실패한다. 보안 검사를 무력화하지 않았으며, 현재 구현을 Codex login 지원 완료로 표시하지 않는다.
 - 이식 가능한 세션을 읽는 것과 다른 OS에서 기존 경로를 사용하는 작업을 재개하는 것은 다르다. cross-OS 작업 경로 재매핑은 미구현이다.
 - CMD compatibility와 Windows graceful console-control 종료는 아직 미구현이다.

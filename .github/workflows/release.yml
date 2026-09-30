@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   build:
-    if: github.repository == 'unreallabsai/unreal-agent'
+    if: github.repository == 'unreallabsai/unreal-agent' || github.repository == 'simhanson123/unreal-agent'
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     permissions:
@@ -51,17 +51,45 @@ jobs:
               tar -czf "dist/$archive.tar.gz" -C "dist/$archive" unreal-agent-runner LICENSE
             done
           done
-          (cd dist && sha256sum ./*.tar.gz > SHA256SUMS)
+          archive="unreal-agent-runner_${RELEASE_TAG#v}_windows_amd64"
+          mkdir -p "dist/$archive"
+          GOOS=windows GOARCH=amd64 go build -mod=readonly -trimpath \
+            -o "dist/$archive/unreal-agent-runner.exe" ./cmd/unreal-agent-runner
+          cp LICENSE "dist/$archive/"
+          (cd "dist/$archive" && zip -q "../$archive.zip" unreal-agent-runner.exe LICENSE)
+          (cd dist && sha256sum ./*.tar.gz ./*.zip > SHA256SUMS)
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: release
           path: |
             dist/*.tar.gz
+            dist/*.zip
             dist/SHA256SUMS
           if-no-files-found: error
           retention-days: 7
 
+  windows:
+    if: github.repository == 'unreallabsai/unreal-agent' || github.repository == 'simhanson123/unreal-agent'
+    runs-on: windows-2025
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Check Windows runtime
+        run: |
+          go build -mod=readonly ./...
+          go test -race -count=1 -timeout=3m ./harness/hosttest ./cmd/hosttest
+          go test -count=1 -timeout=3m ./harness/sessionstore/... ./harness/tool ./harness/contextbuilder ./harness/inbox ./harness/llm ./harness/llm/responsesapi ./harness/llm/clients/openai ./harness/llm/clients/openrouter ./harness/llm/clients/ollama ./harness/llm/clients/fireworks
+
   docker:
+    if: github.repository == 'unreallabsai/unreal-agent'
     needs: build
     environment: release-env
     runs-on: ubuntu-24.04
@@ -102,7 +130,11 @@ jobs:
             --label "org.opencontainers.image.licenses=MIT" .
 
   publish:
-    needs: [build, docker]
+    needs: [build, windows, docker]
+    if: >-
+      always() && needs.build.result == 'success' && needs.windows.result == 'success' &&
+      (needs.docker.result == 'success' ||
+      (github.repository == 'simhanson123/unreal-agent' && needs.docker.result == 'skipped'))
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -120,5 +152,5 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          gh release create "$RELEASE_TAG" dist/*.tar.gz dist/SHA256SUMS \
+          gh release create "$RELEASE_TAG" dist/*.tar.gz dist/*.zip dist/SHA256SUMS \
             --repo "$GITHUB_REPOSITORY" --verify-tag --title "$RELEASE_TAG" --generate-notes

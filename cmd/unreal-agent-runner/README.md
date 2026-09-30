@@ -9,6 +9,12 @@ Install with Go 1.27+:
 go install github.com/unreallabsai/unreal-agent/cmd/unreal-agent-runner@latest
 ```
 
+For this fork's native Windows port, download the Windows AMD64 ZIP from
+[GitHub Releases](https://github.com/simhanson123/unreal-agent/releases)
+and follow the [Windows installation instructions](../../README.md#windows-native-preview).
+The `go install ...@latest` command above targets the upstream module, not
+this fork's Windows release.
+
 Set an OpenAI API key and run a prompt in the current directory:
 
 ```sh

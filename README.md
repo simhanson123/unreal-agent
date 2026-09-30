@@ -9,8 +9,25 @@ An async-first agent harness from Unreal Labs.
 ## Windows native preview
 
 This fork adds a native Windows process backend using Job Objects, PowerShell 7
-execution, and session persistence support. Go 1.27+ and PowerShell 7 are required;
-Git Bash and WSL are not required.
+execution, and session persistence support. PowerShell 7 is required at runtime;
+Git Bash, WSL, and Go are not required to run a downloaded release.
+
+Download `unreal-agent-runner_0.2.1_windows_amd64.zip` from the
+[Windows preview release](https://github.com/simhanson123/unreal-agent/releases/tag/v0.2.1).
+Extract it and run the binary in PowerShell:
+
+```powershell
+Expand-Archive .\unreal-agent-runner_0.2.1_windows_amd64.zip -DestinationPath .\unreal-agent
+$env:OPENAI_API_KEY = "<your API key>"
+.\unreal-agent\unreal-agent-runner.exe -workspace . -p "Summarize this project."
+```
+
+The archive includes `LICENSE`. Verify the ZIP against the release's
+`SHA256SUMS` before use: `(Get-FileHash .\unreal-agent-runner_0.2.1_windows_amd64.zip -Algorithm SHA256).Hash`
+must match its entry. Future versions appear on the
+[Releases page](https://github.com/simhanson123/unreal-agent/releases).
+
+To build from source, install Go 1.27+ and run:
 
 ```powershell
 go build -trimpath -o bin/unreal-agent-runner.exe ./cmd/unreal-agent-runner
