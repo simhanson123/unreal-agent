@@ -1,0 +1,20 @@
+{
+  "name": "unreal-agent-windows",
+  "version": "0.1.0",
+  "description": "unreal-agent(+Windows): let Claude Code delegate tasks to the unreal-agent harness running non-Claude providers (OpenAI, OpenRouter, Fireworks, Ollama) with native Windows, Linux, and macOS shell execution.",
+  "author": {
+    "name": "simhanson123",
+    "url": "https://github.com/simhanson123"
+  },
+  "repository": "https://github.com/simhanson123/unreal-agent-plus-windows",
+  "license": "MIT",
+  "keywords": [
+    "agent-harness",
+    "windows",
+    "powershell",
+    "delegation",
+    "openai",
+    "ollama",
+    "openrouter"
+  ]
+}
