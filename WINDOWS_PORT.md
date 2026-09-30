@@ -123,7 +123,7 @@ checkout CRLF로 embedded prompt가 달라지는 문제도 수정했다.
 - Shell 프로세스 환경은 기존처럼 상속한다. secret filtering과 최소 환경 전달은 별도 작업이다.
 - 일반 background operation은 Shell이 살아 있는 동안 실행된다. Shell 종료 후 자식만 남기는 detached daemon은 허용하지 않는다.
 - Release workflow는 원본과 포크의 버전 태그에서 Linux/macOS archive 및 Windows AMD64 ZIP과 SHA256SUMS를 게시한다. 포크에서는 Docker 게시가 건너뛰어지며 Windows 테스트 성공이 필수다. `main` CI artifact는 GitHub Release가 아니며 태그를 게시해야 다운로드 가능하다. MSI/winget installer는 제공하지 않는다.
-- Windows `v0.2.1` 프리뷰 릴리스는 기존 커밋 `924a022`로 게시했다. 이 릴리스에는 Windows ZIP 및 SHA256SUMS만 포함된다. 이후 버전 태그는 위 워크플로를 통해 자동 배포한다.
+- Windows `v0.2.1` 프리뷰 릴리스는 기존 커밋 `924a022`로 게시했다. 이 릴리스에는 Windows ZIP 및 SHA256SUMS만 포함된다. 이후 버전 태그는 위 워크플로를 통해 자동 배포한다. `v0.2.3`부터 Linux/macOS archive와 Windows ZIP, SHA256SUMS가 GitHub Actions 파이프라인으로 자동 게시되며, 게시된 Windows ZIP의 체크섬과 실행을 검증했다.
 - 포크 저장소에서 GitHub push 이벤트가 워크플로를 시작하지 않는 현상을 확인했다. `workflow_dispatch`(수동 트리거)는 정상 동작하므로, Release 워크플로에 `workflow_dispatch` 트리거를 추가하고 버전 태그 ref에서 수동 실행하는 방식으로 배포한다. 원인이 해소되면 태그 push만으로 자동 실행된다. Settings → Actions에서 저장소 정책 확인이 필요하다.
 - macOS CI에서 임시 디렉터리가 `/var` → `/private/var` 심볼릭 링크로 해석되어 환경 변수 계약 테스트가 실패했다. 경로 비교를 심볼릭 링크 해석 후 수행하도록 수정했다.
 - 기존 `openaicodex` credential-file backend는 POSIX 파일 권한과 HOME 전제가 있어 Windows 인증 테스트가 아직 실패한다. 보안 검사를 무력화하지 않았으며, 현재 구현을 Codex login 지원 완료로 표시하지 않는다.

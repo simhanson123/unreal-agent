@@ -12,20 +12,20 @@ This fork adds a native Windows process backend using Job Objects, PowerShell 7
 execution, and session persistence support. PowerShell 7 is required at runtime;
 Git Bash, WSL, and Go are not required to run a downloaded release.
 
-Download `unreal-agent-runner_0.2.1_windows_amd64.zip` from the
-[Windows preview release](https://github.com/simhanson123/unreal-agent/releases/tag/v0.2.1).
+Download `unreal-agent-runner_<version>_windows_amd64.zip` from the latest
+[release](https://github.com/simhanson123/unreal-agent/releases) (for example
+[`v0.2.3`](https://github.com/simhanson123/unreal-agent/releases/tag/v0.2.3)).
 Extract it and run the binary in PowerShell:
 
 ```powershell
-Expand-Archive .\unreal-agent-runner_0.2.1_windows_amd64.zip -DestinationPath .\unreal-agent
+Expand-Archive .\unreal-agent-runner_0.2.3_windows_amd64.zip -DestinationPath .\unreal-agent
 $env:OPENAI_API_KEY = "<your API key>"
 .\unreal-agent\unreal-agent-runner.exe -workspace . -p "Summarize this project."
 ```
 
 The archive includes `LICENSE`. Verify the ZIP against the release's
-`SHA256SUMS` before use: `(Get-FileHash .\unreal-agent-runner_0.2.1_windows_amd64.zip -Algorithm SHA256).Hash`
-must match its entry. Future versions appear on the
-[Releases page](https://github.com/simhanson123/unreal-agent/releases).
+`SHA256SUMS` before use: `(Get-FileHash .\unreal-agent-runner_0.2.3_windows_amd64.zip -Algorithm SHA256).Hash`
+must match its entry.
 
 To build from source, install Go 1.27+ and run:
 
