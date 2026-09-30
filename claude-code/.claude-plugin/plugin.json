@@ -1,6 +1,6 @@
 {
   "name": "unreal-agent-windows",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "unreal-agent(+Windows): let Claude Code delegate tasks to the unreal-agent harness running non-Claude providers (Codex subscription, OpenAI, OpenRouter, Fireworks, Ollama) with native Windows, Linux, and macOS shell execution.",
   "author": {
     "name": "simhanson123",

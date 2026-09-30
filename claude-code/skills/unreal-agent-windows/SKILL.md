@@ -47,11 +47,12 @@ ask the user to run `codex login` themselves (it opens a browser).
 
 ## 2. Delegate
 
-Write the task to a UTF-8 prompt file (self-contained: the delegate sees nothing from this
-conversation), then run:
+Make the task self-contained: the delegate sees nothing from this conversation. Pass a short
+task inline with `-Prompt "<task>"`; for a long or multi-line task, write it to a UTF-8 file and
+pass `-PromptFile <file>` instead.
 
 ```
-pwsh -NoProfile -File <skill>/scripts/Invoke-UnrealAgent.ps1 -Workspace <dir> -PromptFile <file> [-Provider <name>] [-Model <id>] [-ThinkingLevel low|medium|high|xhigh|max] [-NoShell] [-TimeoutMinutes N]
+pwsh -NoProfile -File <skill>/scripts/Invoke-UnrealAgent.ps1 -Workspace <dir> (-Prompt <text> | -PromptFile <file>) [-Provider <name>] [-Model <id>] [-ThinkingLevel low|medium|high|xhigh|max] [-NoShell] [-TimeoutMinutes N]
 ```
 
 - The delegate executes shell commands in `<dir>` with the user's privileges; the harness is
