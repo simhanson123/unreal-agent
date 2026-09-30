@@ -142,6 +142,22 @@ func terminal(t *testing.T, events <-chan primitives.PrimitiveEvent) (primitives
 	}
 }
 
+// samePath reports whether two directories refer to the same location even
+// when the host resolves a symlinked or aliased temporary directory root,
+// such as /var versus /private/var on macOS.
+func samePath(t *testing.T, reported, requested string) bool {
+	t.Helper()
+	if reported == requested {
+		return true
+	}
+	resolvedReported, reportedErr := filepath.EvalSymlinks(reported)
+	resolvedRequested, requestedErr := filepath.EvalSymlinks(requested)
+	if reportedErr != nil || requestedErr != nil {
+		return false
+	}
+	return resolvedReported == resolvedRequested
+}
+
 func TestHostProcessStreamsAndDrains(t *testing.T) {
 	for _, mode := range []string{"streams", "large", "input", "environment"} {
 		t.Run(mode, func(t *testing.T) {
@@ -177,7 +193,14 @@ func TestHostProcessStreamsAndDrains(t *testing.T) {
 			case "large":
 				want = strings.Repeat("x", 256*1024)
 			case "environment":
-				want = request.Directory + "\nvalue"
+				directory, value, ok := strings.Cut(out, "\n")
+				if !ok || value != "value" || !samePath(t, directory, request.Directory) {
+					t.Fatalf("environment output = %q, want directory %q and value", out, request.Directory)
+				}
+				if code := event.Result.(primitives.ProcessExitResult).ExitCode; code != 0 {
+					t.Fatalf("exit = %#v", event.Result)
+				}
+				return
 			}
 			if out != want || event.Result.(primitives.ProcessExitResult).ExitCode != exitCode {
 				t.Fatalf("output length = %d, expected %d; exit = %#v", len(out), len(want), event.Result)
