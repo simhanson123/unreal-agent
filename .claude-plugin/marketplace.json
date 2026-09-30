@@ -1,0 +1,16 @@
+{
+  "name": "unreal-agent-plus-windows",
+  "description": "Claude Code plugins for unreal-agent(+Windows), the Windows-native fork of unreal-agent.",
+  "owner": {
+    "name": "simhanson123"
+  },
+  "plugins": [
+    {
+      "name": "unreal-agent-windows",
+      "source": "./claude-code",
+      "description": "unreal-agent(+Windows): delegate tasks from Claude Code to the unreal-agent harness with its own non-Claude provider credentials.",
+      "repository": "https://github.com/simhanson123/unreal-agent-plus-windows",
+      "license": "MIT"
+    }
+  ]
+}

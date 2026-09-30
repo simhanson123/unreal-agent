@@ -3,7 +3,7 @@
 ## 범위와 기준선
 
 - 계획 기준일: 2026-09-29.
-- 포크: `simhanson123/unreal-agent`.
+- 포크: `simhanson123/unreal-agent-plus-windows`.
 - 변경 전 기준 커밋: `1b9f778` (`Avoid lost wakeup in process output drain test`).
 - 원본 MIT 라이선스와 Go module 경로를 유지한다.
 - 이번 변경은 Phase 0 조사 및 Phase 1/2의 첫 Windows 실행 기반이다.
@@ -129,6 +129,18 @@ checkout CRLF로 embedded prompt가 달라지는 문제도 수정했다.
 - 기존 `openaicodex` credential-file backend는 POSIX 파일 권한과 HOME 전제가 있어 Windows 인증 테스트가 아직 실패한다. 보안 검사를 무력화하지 않았으며, 현재 구현을 Codex login 지원 완료로 표시하지 않는다.
 - 이식 가능한 세션을 읽는 것과 다른 OS에서 기존 경로를 사용하는 작업을 재개하는 것은 다르다. cross-OS 작업 경로 재매핑은 미구현이다.
 - CMD compatibility와 Windows graceful console-control 종료는 아직 미구현이다.
+
+## Claude Code 연동
+
+Claude Code 구독 자격증명은 제3자 소프트웨어가 재사용할 수 없다. 따라서 harness가 Claude Code를 통해 Claude를 호출하는 구조는 만들지 않고, 방향을 뒤집는다.
+
+- Claude Code가 오케스트레이터이고, `claude-code/` 플러그인의 `unreal-agent-windows` skill이 `unreal-agent-runner`에 작업을 위임한다.
+- runner는 자체 provider 인증(OpenAI, OpenRouter, Fireworks, Ollama, Codex access token)만 사용한다.
+- skill 스크립트는 runner 환경에서 `CLAUDE_CODE_OAUTH_TOKEN`, `ANTHROPIC_AUTH_TOKEN`, `CLAUDE_CODE_*TOKEN*/*SECRET*/*KEY*` 변수를 제거한다. 모델이 실행한 Shell 명령에서 해당 변수가 보이지 않는 것을 확인했다.
+- 저장소 루트의 `.claude-plugin/marketplace.json`으로 `/plugin marketplace add simhanson123/unreal-agent-plus-windows` 설치를 지원한다.
+- `.harness/skills/*/SKILL.md`는 Claude Code skill과 같은 frontmatter 형식이므로 Claude Code가 직접 읽어 따를 수도 있다.
+
+로컬 검증: 가짜 Responses API 서버와 v0.2.3 Windows runner로 Shell tool 호출, 한글·공백 workspace 경로, 세션 재개(같은 `session_id`에 입력 누적), 연결 실패 시 오류 요약과 종료 코드 1, 자격증명 누락 사전 차단, 릴리스 다운로드와 SHA-256 검증을 확인했다. Linux/macOS에서는 스크립트를 아직 실행하지 않았다.
 
 ## 후속 개발 순서
 

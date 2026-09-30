@@ -1,10 +1,26 @@
-# Unreal Agent
+# unreal-agent(+Windows)
 
-An async-first agent harness from Unreal Labs.
+An async-first agent harness from Unreal Labs, with native Windows support and a
+Claude Code plugin. Fork of
+[unreallabsai/unreal-agent](https://github.com/unreallabsai/unreal-agent).
 
 - [harness/](harness/) — the library.
 - [cmd/](cmd/) — executables that use the library.
 - [benchmarks/](benchmarks/) — benchmark runners.
+- [claude-code/](claude-code/) — Claude Code plugin that delegates tasks to the runner.
+
+## Claude Code
+
+Claude Code subscription credentials cannot be used by third-party software, so the
+harness does not call Claude through Claude Code. Instead, Claude Code orchestrates and
+delegates to the harness, which uses its own provider credentials:
+
+```text
+/plugin marketplace add simhanson123/unreal-agent-plus-windows
+/plugin install unreal-agent-windows@unreal-agent-plus-windows
+```
+
+See [claude-code/README.md](claude-code/README.md).
 
 ## Windows native preview
 
@@ -13,8 +29,8 @@ execution, and session persistence support. PowerShell 7 is required at runtime;
 Git Bash, WSL, and Go are not required to run a downloaded release.
 
 Download `unreal-agent-runner_<version>_windows_amd64.zip` from the latest
-[release](https://github.com/simhanson123/unreal-agent/releases) (for example
-[`v0.2.3`](https://github.com/simhanson123/unreal-agent/releases/tag/v0.2.3)).
+[release](https://github.com/simhanson123/unreal-agent-plus-windows/releases) (for example
+[`v0.2.3`](https://github.com/simhanson123/unreal-agent-plus-windows/releases/tag/v0.2.3)).
 Extract it and run the binary in PowerShell:
 
 ```powershell
