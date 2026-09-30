@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -20,6 +21,7 @@ func writeTestAuth(t *testing.T, path, token, account string) {
 	if err := os.WriteFile(path, data, 0o600); err != nil {
 		t.Fatal(err)
 	}
+	makeAuthFilePrivate(t, path)
 }
 
 func TestCredentials(t *testing.T) {
@@ -74,20 +76,22 @@ func TestReadAuthFile(t *testing.T) {
 	}
 	for _, test := range []struct {
 		name, body, match string
-		mode              os.FileMode
+		public            bool
 	}{
-		{"public", string(before), "private permissions", 0o644},
-		{"invalid", "{bad-secret}", "invalid Codex auth file", 0o600},
-		{"API-key mode", `{"auth_mode":"apikey","OPENAI_API_KEY":"sk-secret","tokens":{"access_token":"opaque","account_id":"account"}}`, "not a ChatGPT", 0o600},
-		{"missing tokens", `{"OPENAI_API_KEY":"sk-secret"}`, "access token must be set", 0o600},
-		{"too large", strings.Repeat(" ", 1<<20) + "{}", "invalid Codex auth file", 0o600},
+		{"public", string(before), "private", true},
+		{"invalid", "{bad-secret}", "invalid Codex auth file", false},
+		{"API-key mode", `{"auth_mode":"apikey","OPENAI_API_KEY":"sk-secret","tokens":{"access_token":"opaque","account_id":"account"}}`, "not a ChatGPT", false},
+		{"missing tokens", `{"OPENAI_API_KEY":"sk-secret"}`, "access token must be set", false},
+		{"too large", strings.Repeat(" ", 1<<20) + "{}", "invalid Codex auth file", false},
 	} {
 		t.Run(test.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "auth.json")
 			if err := os.WriteFile(path, []byte(test.body), 0o600); err != nil {
 				t.Fatal(err)
 			}
-			if err := os.Chmod(path, test.mode); err != nil {
-				t.Fatal(err)
+			makeAuthFilePrivate(t, path)
+			if test.public {
+				makeAuthFilePublic(t, path)
 			}
 			_, err := (Config{AuthFile: path}).credentials()
 			if err == nil || !strings.Contains(err.Error(), test.match) || strings.Contains(err.Error(), "secret") {
@@ -104,32 +108,44 @@ func TestReadAuthFile(t *testing.T) {
 }
 
 func TestEnvironmentConfig(t *testing.T) {
+	// Codex resolves its home from the user profile on Windows and from HOME elsewhere.
+	homeVariable := "HOME"
+	if runtime.GOOS == "windows" {
+		homeVariable = "USERPROFILE"
+	}
+	path := func(parts ...string) string {
+		return filepath.Join(append([]string{string(filepath.Separator)}, parts...)...)
+	}
 	for _, test := range []struct {
 		name                 string
 		processHome          string
 		env                  map[string]string
 		file, token, account string
+		refresh              bool
 		invalid              bool
 	}{
-		{name: "injected home takes precedence", processHome: "/process/home", env: map[string]string{"HOME": " /injected/home "}, file: "/injected/home/.codex/auth.json"},
-		{name: "injected home without process home", env: map[string]string{"HOME": "/injected/home"}, file: "/injected/home/.codex/auth.json"},
-		{name: "home default", env: map[string]string{"HOME": "/home/example", "OPENAI_API_KEY": "sk-api", "UNREAL_HARNESS_LLM_API_KEY": "sk-generic"}, file: "/home/example/.codex/auth.json"},
-		{name: "process home fallback", processHome: "/process/home", file: "/process/home/.codex/auth.json"},
+		{name: "injected home takes precedence", processHome: path("process", "home"), env: map[string]string{homeVariable: " " + path("injected", "home") + " "}, file: path("injected", "home", ".codex", "auth.json"), refresh: true},
+		{name: "injected home without process home", env: map[string]string{homeVariable: path("injected", "home")}, file: path("injected", "home", ".codex", "auth.json"), refresh: true},
+		{name: "home default", env: map[string]string{homeVariable: path("home", "example"), "OPENAI_API_KEY": "sk-api", "UNREAL_HARNESS_LLM_API_KEY": "sk-generic"}, file: path("home", "example", ".codex", "auth.json"), refresh: true},
+		{name: "process home fallback", processHome: path("process", "home"), file: path("process", "home", ".codex", "auth.json"), refresh: true},
 		{name: "missing home", invalid: true},
-		{name: "codex home", env: map[string]string{"CODEX_HOME": "/custom/codex"}, file: "/custom/codex/auth.json"},
+		{name: "codex home", env: map[string]string{"CODEX_HOME": path("custom", "codex")}, file: path("custom", "codex", "auth.json"), refresh: true},
 		{name: "explicit file", env: map[string]string{"OPENAI_CODEX_AUTH_FILE": "/custom/auth.json"}, file: "/custom/auth.json"},
 		{name: "explicit token", env: map[string]string{"OPENAI_CODEX_ACCESS_TOKEN": " token ", "OPENAI_CODEX_ACCOUNT_ID": " account "}, token: "token", account: "account"},
 		{name: "partial token configuration", env: map[string]string{"OPENAI_CODEX_ACCOUNT_ID": "account"}, account: "account"},
 		{name: "conflict", env: map[string]string{"OPENAI_CODEX_AUTH_FILE": "/file", "OPENAI_CODEX_ACCESS_TOKEN": "token"}, invalid: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			t.Setenv("HOME", test.processHome)
+			t.Setenv(homeVariable, test.processHome)
 			config, err := EnvironmentConfig(func(key string) string { return test.env[key] })
 			if (err != nil) != test.invalid {
 				t.Fatalf("error = %v", err)
 			}
 			if !test.invalid && (config.AuthFile != test.file || config.AccessToken != test.token || config.AccountID != test.account) {
 				t.Fatal("incorrect credential source selected")
+			}
+			if !test.invalid && (config.Refresh != nil) != test.refresh {
+				t.Fatal("refresh must be enabled only for the default Codex login file")
 			}
 		})
 	}

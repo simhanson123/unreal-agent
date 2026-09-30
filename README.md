@@ -51,9 +51,19 @@ go test -race ./harness/hosttest ./cmd/hosttest
 .\bin\unreal-agent-runner.exe -h
 ```
 
+To use a Codex (ChatGPT) subscription, sign in once with the official Codex CLI and
+select the `openai-codex` provider. The runner reuses Codex's login and asks
+`codex app-server` to refresh it when needed:
+
+```powershell
+codex login
+$env:UNREAL_HARNESS_LLM_PROVIDER = "openai-codex"
+$env:UNREAL_HARNESS_LLM_MODEL = "<a Codex model, e.g. the model in ~/.codex/config.toml>"
+.\unreal-agent\unreal-agent-runner.exe -workspace . -p "Summarize this project."
+```
+
 This is an initial runtime port, not a completed sandbox or coding-agent MVP.
-The existing Codex credential-file backend is not yet Windows-ready; official
-SDK login, Anthropic, and Kimi integration remain follow-up work.
+Anthropic and Kimi integration remain follow-up work.
 See [Windows port status and roadmap](WINDOWS_PORT.md) for verified scope,
 known limitations, and the implementation sequence.
 
