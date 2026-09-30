@@ -57,10 +57,15 @@ function Test-ProviderCredential {
     $name = $script:ProviderKeyEnvironment[$effectiveProvider]
     if ($effectiveProvider -eq 'openai-codex') {
         if ($env:OPENAI_CODEX_ACCESS_TOKEN) { return 'OPENAI_CODEX_ACCESS_TOKEN is set' }
-        if ($IsWindows) {
-            return 'MISSING: the Codex auth-file backend is not Windows-ready yet; set OPENAI_CODEX_ACCESS_TOKEN or use the official `codex exec` CLI'
+        if ($env:OPENAI_CODEX_AUTH_FILE) { return "uses OPENAI_CODEX_AUTH_FILE (no automatic refresh)" }
+        # The default Codex login is owned by the Codex CLI, which also refreshes it for the runner.
+        $codex = if ($env:OPENAI_CODEX_CLI) { $env:OPENAI_CODEX_CLI } else { 'codex' }
+        if (-not (Get-Command $codex -ErrorAction SilentlyContinue)) {
+            return 'MISSING: install the Codex CLI and run `codex login` (ChatGPT sign-in)'
         }
-        return 'uses OPENAI_CODEX_AUTH_FILE or $CODEX_HOME/auth.json (chmod 600)'
+        $status = (& $codex login status 2>&1 | Out-String).Trim()
+        if ($status -match 'ChatGPT') { return "Codex ChatGPT login ($status)" }
+        return "MISSING: run ``codex login`` and sign in with ChatGPT (codex login status: $status)"
     }
     if (-not $name) { return 'no credential required' }
     if ([Environment]::GetEnvironmentVariable($name)) { return "$name is set" }

@@ -14,7 +14,7 @@ the harness:
 ```text
 User -> Claude Code (Claude, your subscription)
           -> unreal-agent-windows skill
-               -> unreal-agent-runner (OpenAI / OpenRouter / Fireworks / Ollama / Codex token)
+               -> unreal-agent-runner (Codex subscription / OpenAI / OpenRouter / Fireworks / Ollama)
                     -> native shell in the workspace
 ```
 
@@ -66,5 +66,5 @@ Each run is stored in `<state>/unreal-agent/claude-code-runs/<timestamp>-<sessio
 
 - The harness is not a security sandbox; the delegate runs commands with your privileges.
 - Anthropic and Kimi/Moonshot providers are not implemented in the runner yet.
-- The `openai-codex` auth-file backend is not Windows-ready; use `OPENAI_CODEX_ACCESS_TOKEN`
-  or the official `codex exec` CLI.
+- `openai-codex` needs the Codex CLI signed in with ChatGPT (`codex login`); Codex refreshes the
+  login itself when the runner asks through `codex app-server`.

@@ -1,6 +1,6 @@
 ---
 name: unreal-agent-windows
-description: Delegate a task to the unreal-agent(+Windows) harness, which runs its own agent loop with a non-Claude provider (OpenAI API, OpenRouter, Fireworks, local Ollama, or a Codex access token) and native Windows/Linux/macOS shell execution. Use when the user asks to run unreal-agent or unreal-agent-runner, delegate work or get a second opinion from GPT/OpenRouter/Ollama/another model, resume or inspect a harness session or run log, install the runner, or use a workspace's .harness/skills.
+description: Delegate a task to the unreal-agent(+Windows) harness, which runs its own agent loop with a non-Claude provider (OpenAI API, OpenRouter, Fireworks, local Ollama, or the user's Codex/ChatGPT subscription via `codex login`) and native Windows/Linux/macOS shell execution. Use when the user asks to run unreal-agent or unreal-agent-runner, delegate work or get a second opinion from Codex/GPT/OpenRouter/Ollama/another model, resume or inspect a harness session or run log, install the runner, or use a workspace's .harness/skills.
 ---
 
 # unreal-agent(+Windows)
@@ -35,11 +35,15 @@ Resolve every `MISSING` line before running:
 | `openrouter` | `OPENROUTER_API_KEY` | required, `<vendor>/<model>` as listed by OpenRouter |
 | `fireworks` | `FIREWORKS_API_KEY` | required |
 | `ollama` | none (local server, `UNREAL_HARNESS_LLM_BASE_URL` to override) | required |
-| `openai-codex` | `OPENAI_CODEX_ACCESS_TOKEN` (auth-file mode is not Windows-ready) | required |
+| `openai-codex` | Codex ChatGPT sign-in (`codex login`); or `OPENAI_CODEX_ACCESS_TOKEN` | required, e.g. the `model` in `~/.codex/config.toml` |
 
 `UNREAL_HARNESS_LLM_API_KEY` overrides any provider key. Kimi/Moonshot and Anthropic
-providers are not implemented in the runner yet. For a Codex *subscription* on Windows,
-prefer the official `codex exec` CLI over the harness until the auth-file backend is ported.
+providers are not implemented in the runner yet.
+
+`openai-codex` reuses the Codex CLI's own ChatGPT login (`CODEX_HOME/auth.json`). Codex keeps
+ownership of it: when the token is about to expire or is rejected, the runner asks the official
+`codex app-server` to refresh it, then rereads the file. If preflight reports no ChatGPT login,
+ask the user to run `codex login` themselves (it opens a browser).
 
 ## 2. Delegate
 

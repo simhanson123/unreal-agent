@@ -126,7 +126,6 @@ checkout CRLF로 embedded prompt가 달라지는 문제도 수정했다.
 - Windows `v0.2.1` 프리뷰 릴리스는 기존 커밋 `924a022`로 게시했다. 이 릴리스에는 Windows ZIP 및 SHA256SUMS만 포함된다. 이후 버전 태그는 위 워크플로를 통해 자동 배포한다. `v0.2.3`부터 Linux/macOS archive와 Windows ZIP, SHA256SUMS가 GitHub Actions 파이프라인으로 자동 게시되며, 게시된 Windows ZIP의 체크섬과 실행을 검증했다.
 - 포크 저장소에서 GitHub push 이벤트가 워크플로를 시작하지 않는 현상을 확인했다. `workflow_dispatch`(수동 트리거)는 정상 동작하므로, Release 워크플로에 `workflow_dispatch` 트리거를 추가하고 버전 태그 ref에서 수동 실행하는 방식으로 배포한다. 원인이 해소되면 태그 push만으로 자동 실행된다. Settings → Actions에서 저장소 정책 확인이 필요하다.
 - macOS CI에서 임시 디렉터리가 `/var` → `/private/var` 심볼릭 링크로 해석되어 환경 변수 계약 테스트가 실패했다. 경로 비교를 심볼릭 링크 해석 후 수행하도록 수정했다.
-- 기존 `openaicodex` credential-file backend는 POSIX 파일 권한과 HOME 전제가 있어 Windows 인증 테스트가 아직 실패한다. 보안 검사를 무력화하지 않았으며, 현재 구현을 Codex login 지원 완료로 표시하지 않는다.
 - 이식 가능한 세션을 읽는 것과 다른 OS에서 기존 경로를 사용하는 작업을 재개하는 것은 다르다. cross-OS 작업 경로 재매핑은 미구현이다.
 - CMD compatibility와 Windows graceful console-control 종료는 아직 미구현이다.
 
@@ -135,18 +134,35 @@ checkout CRLF로 embedded prompt가 달라지는 문제도 수정했다.
 Claude Code 구독 자격증명은 제3자 소프트웨어가 재사용할 수 없다. 따라서 harness가 Claude Code를 통해 Claude를 호출하는 구조는 만들지 않고, 방향을 뒤집는다.
 
 - Claude Code가 오케스트레이터이고, `claude-code/` 플러그인의 `unreal-agent-windows` skill이 `unreal-agent-runner`에 작업을 위임한다.
-- runner는 자체 provider 인증(OpenAI, OpenRouter, Fireworks, Ollama, Codex access token)만 사용한다.
+- runner는 자체 provider 인증(Codex ChatGPT 로그인, OpenAI, OpenRouter, Fireworks, Ollama)만 사용한다.
 - skill 스크립트는 runner 환경에서 `CLAUDE_CODE_OAUTH_TOKEN`, `ANTHROPIC_AUTH_TOKEN`, `CLAUDE_CODE_*TOKEN*/*SECRET*/*KEY*` 변수를 제거한다. 모델이 실행한 Shell 명령에서 해당 변수가 보이지 않는 것을 확인했다.
 - 저장소 루트의 `.claude-plugin/marketplace.json`으로 `/plugin marketplace add simhanson123/unreal-agent-plus-windows` 설치를 지원한다.
 - `.harness/skills/*/SKILL.md`는 Claude Code skill과 같은 frontmatter 형식이므로 Claude Code가 직접 읽어 따를 수도 있다.
 
 로컬 검증: 가짜 Responses API 서버와 v0.2.3 Windows runner로 Shell tool 호출, 한글·공백 workspace 경로, 세션 재개(같은 `session_id`에 입력 누적), 연결 실패 시 오류 요약과 종료 코드 1, 자격증명 누락 사전 차단, 릴리스 다운로드와 SHA-256 검증을 확인했다. Linux/macOS에서는 스크립트를 아직 실행하지 않았다.
 
+## Codex 구독 로그인 (Windows)
+
+원본에도 `openai-codex` provider(ChatGPT 구독 backend)가 있었지만 Windows에서는 동작하지 않았다.
+
+- 원인 1: `auth.json`에 POSIX `0600` 검사를 했다. Windows에서 Go는 파일 권한을 항상 `0666`으로 보고하므로 무조건 거부됐다.
+- 원인 2: Codex 홈을 `HOME`에서 찾았다. Windows의 Codex는 사용자 프로필(`USERPROFILE`)을 쓴다.
+- 원인 3: 토큰 갱신이 없어 만료되면 멈췄다.
+
+수정:
+
+- Windows 권한 검사는 DACL로 수행한다. 읽기·쓰기·권한 변경 허용은 현재 사용자, SYSTEM, Administrators, 그리고 Codex가 관리하는 샌드박스 주체에만 허용한다. 샌드박스 주체는 로컬 그룹 `CodexSandboxUsers`와 `CODEX_HOME\cap_sid`에 기록된, 계정으로 해석되지 않는 capability SID다. Everyone, Users, 다른 사용자 계정, null DACL은 거부하고 오류에 해당 계정을 표시한다.
+- Codex가 사용자 프로필을 작업 폴더로 실행된 적이 있으면, 그 샌드박스 SID 권한이 `.codex\auth.json`까지 상속된다. 실제 환경에서 이 상태를 확인했다.
+- 토큰 갱신은 Codex에 맡긴다. 하네스는 refresh token을 사용하지 않는다. 토큰이 5분 안에 만료되거나 401을 받으면, 공식 `codex app-server`의 `account/read`(`refreshToken: true`)로 Codex가 직접 갱신하게 한다. 그다음 파일을 다시 읽고, 요청을 한 번만 재시도한다. 갱신 뒤에도 같은 토큰이면 `codex login`을 안내하고 멈춘다.
+- 명시적인 `OPENAI_CODEX_ACCESS_TOKEN`이나 `OPENAI_CODEX_AUTH_FILE`을 쓰는 경우는 원본처럼 한 번만 읽고 갱신하지 않는다.
+
+검증: 가짜 app-server로 갱신, 오류, API key 계정을 테스트했다. 만료 토큰의 사전 갱신, 401 후 1회 재시도, 동일 토큰 재거부, ACL 케이스도 테스트했다. 실제 Codex CLI 0.156.1로 갱신 테스트(`OPENAI_CODEX_TEST_LIVE_REFRESH=1`)를 통과했고, Windows에서 ChatGPT 구독으로 실제 모델 호출과 Shell tool 실행에 성공했다. 실행 출력에 토큰이 없음을 확인했다.
+
 ## 후속 개발 순서
 
 1. Windows 전체 기존 테스트 이식, graceful 종료 capability 및 junction/UNC 검증 강화.
 2. Read/Search/Write/ApplyPatch와 Git diff 도구 추가. stale version 및 workspace boundary 검사 포함.
-3. Provider와 인증 capability 분리, 공식 Codex SDK 로그인 통합 검증.
+3. Provider와 인증 capability 분리. Codex 구독 로그인은 Codex CLI 소유로 재사용·갱신한다(완료).
 4. OpenAI API와 Anthropic API를 독립 backend로 정리.
 5. Kimi 지원: `MOONSHOT_API_KEY` 기반 Moonshot API와 Kimi Code Console API key를 별도 인증/endpoint 설정으로 취급한다. 공식 문서로 protocol 및 tool capability를 확인한 후 adapter를 구현한다.
 6. Claude Agent SDK는 공식 지원 인증만 사용한다. Claude Code credential 접근, identity 위조, undocumented OAuth는 구현하지 않는다.

@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -15,9 +16,13 @@ import (
 type credentials struct {
 	accessToken string
 	accountID   string
+	expires     int64 // Unix seconds from unverified claims; 0 when unknown.
 }
 
+var errExpiredToken = errors.New("codex access token has expired")
+
 // EnvironmentConfig selects a source without reading files or consulting API keys.
+// The default Codex login file is refreshed through the official Codex CLI when needed.
 func EnvironmentConfig(getenv func(string) string) (Config, error) {
 	config := Config{
 		AccessToken: strings.TrimSpace(getenv("OPENAI_CODEX_ACCESS_TOKEN")),
@@ -32,7 +37,12 @@ func EnvironmentConfig(getenv func(string) string) (Config, error) {
 	}
 	home := strings.TrimSpace(getenv("CODEX_HOME"))
 	if home == "" {
-		userHome := strings.TrimSpace(getenv("HOME"))
+		// Codex keeps its home in the user profile on Windows, which HOME need not match.
+		homeVariable := "HOME"
+		if runtime.GOOS == "windows" {
+			homeVariable = "USERPROFILE"
+		}
+		userHome := strings.TrimSpace(getenv(homeVariable))
 		if userHome == "" {
 			var err error
 			userHome, err = os.UserHomeDir()
@@ -43,6 +53,7 @@ func EnvironmentConfig(getenv func(string) string) (Config, error) {
 		home = filepath.Join(userHome, ".codex")
 	}
 	config.AuthFile = filepath.Join(home, "auth.json")
+	config.Refresh = CodexCLIRefresher(strings.TrimSpace(getenv("OPENAI_CODEX_CLI")), home)
 	return config, nil
 }
 
@@ -69,7 +80,10 @@ func (config Config) credentials() (credentials, error) {
 		return credentials{}, err
 	}
 	if expires != 0 && time.Now().Unix() >= expires {
-		return credentials{}, errors.New("codex access token has expired; renew credentials externally (interactive login and token refresh are not implemented)")
+		if config.Refresh != nil {
+			return credentials{}, errExpiredToken
+		}
+		return credentials{}, fmt.Errorf("%w; renew credentials externally (run `codex login`)", errExpiredToken)
 	}
 	if accountID == "" {
 		accountID = claimAccount
@@ -79,21 +93,24 @@ func (config Config) credentials() (credentials, error) {
 	if accountID == "" || !headerValue(accountID) {
 		return credentials{}, errors.New("codex account ID must be set in OPENAI_CODEX_ACCOUNT_ID, the auth file, or the access token")
 	}
-	return credentials{accessToken: token, accountID: accountID}, nil
+	return credentials{accessToken: token, accountID: accountID, expires: expires}, nil
 }
 
 func readAuthFile(path string) (string, string, error) {
 	file, err := os.Open(path)
 	if err != nil {
-		return "", "", fmt.Errorf("open Codex auth file (provide existing ChatGPT credentials; login is not implemented): %w", err)
+		return "", "", fmt.Errorf("open Codex auth file (sign in with `codex login` first): %w", err)
 	}
 	defer func() { _ = file.Close() }()
 	info, err := file.Stat()
 	if err != nil {
 		return "", "", fmt.Errorf("inspect Codex auth file: %w", err)
 	}
-	if !info.Mode().IsRegular() || info.Mode().Perm()&0o077 != 0 {
+	if !info.Mode().IsRegular() {
 		return "", "", errors.New("codex auth file must be a regular file with private permissions (chmod 600)")
+	}
+	if err := checkPrivateAuthFile(file, info); err != nil {
+		return "", "", err
 	}
 	const limit = 1 << 20
 	data, err := io.ReadAll(io.LimitReader(file, limit+1))
